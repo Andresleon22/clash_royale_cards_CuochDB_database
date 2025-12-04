@@ -45,11 +45,13 @@ function renderCardList(cards) {
         return;
     }
     
+    // MODIFICACIÓN: Usamos UL/LI en lugar de DIV para la lista (práctica semántica)
     const ul = document.createElement('ul');
 
     cards.forEach(card => {
         const li = document.createElement('li'); 
-        
+        li.className = 'card-item';
+
         const cardData = card.data || {}; 
         const id = card._id; 
 
@@ -58,7 +60,11 @@ function renderCardList(cards) {
         const elixir = cardData.elixirCost || '?';
         const rarity = cardData.rarity || 'N/A';
         const type = cardData.type || 'N/A';
-        const imageUrl = cardData.imageUrl || 'https://via.placeholder.com/50?text=NoImg'; // Usar un placeholder si no hay URL
+        
+        // MODIFICACIÓN: Lógica de compatibilidad para la URL de la imagen.
+        // 1. Prioriza el nuevo campo 'imageUrl'.
+        // 2. Si no existe, usa 'iconUrls.medium' (estructura del JSON de ejemplo).
+        const imageUrl = cardData.imageUrl || cardData.iconUrls?.medium || 'https://via.placeholder.com/50?text=NoImg';
 
         li.innerHTML = `
             <div class="card-info">
@@ -110,6 +116,7 @@ form.addEventListener('submit', async (e) => {
             headers: {
                 'Content-Type': 'application/json'
             },
+            // Enviamos los datos anidados en 'data', como espera el servidor
             body: JSON.stringify({ data: cardData }) 
         });
         
@@ -146,8 +153,8 @@ async function loadCardForEdit(cardId) {
         document.getElementById('elixirCost').value = card.data.elixirCost;
         document.getElementById('rarity').value = card.data.rarity;
         document.getElementById('type').value = card.data.type;
-        // NUEVO CAMPO: Cargar URL de la imagen
-        document.getElementById('imageUrl').value = card.data.imageUrl;
+        // NUEVO CAMPO: Cargar URL de la imagen, priorizando 'imageUrl'
+        document.getElementById('imageUrl').value = card.data.imageUrl || card.data.iconUrls?.medium || '';
         
         // Establece el modo edición
         idInput.value = cardId;
