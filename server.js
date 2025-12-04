@@ -8,7 +8,7 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid'); 
 
 const app = express();
-const PORT = process.env.PORT || 3000; // Usa el puerto de Railway o 3000
+const PORT = process.env.PORT || 3000; // CRÍTICO: Usa el puerto de Railway o 3000
 
 app.use(cors());
 app.use(bodyParser.json());
@@ -157,7 +157,6 @@ app.put('/datos/:id', async (req, res) => {
 
         await collection.replace(docId, updatedDocument);
 
-        // 💡 LÍNEA CORREGIDA (solución al SyntaxError 502)
         res.status(200).json({ message: 'Carta actualizada con éxito', id: docId }); 
     } catch (error) {
         if (error instanceof couchbase.DocumentNotFoundError) {
