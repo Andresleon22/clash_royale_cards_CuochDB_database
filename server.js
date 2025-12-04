@@ -37,7 +37,10 @@ async function connectToCouchbase() {
         cluster = await couchbase.connect(connectionString, {
             username: username,
             password: password,
-            configProfile: 'wanDevelopment' 
+            timeouts: {
+                connectTimeout: 30000
+            },
+            configProfile: 'wanDevelopment'
         });
 
         const bucket = cluster.bucket(bucketName);
