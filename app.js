@@ -45,25 +45,27 @@ function renderCardList(cards) {
         return;
     }
     
-    // MODIFICACIÓN: Usamos UL/LI en lugar de DIV para la lista (práctica semántica)
     const ul = document.createElement('ul');
 
     cards.forEach(card => {
         const li = document.createElement('li'); 
         
-        // Accedemos a los datos
         const cardData = card.data || {}; 
         const id = card._id; 
 
-        // MODIFICACIÓN: Mostrar Rareza y Tipo
+        // Datos a mostrar
         const name = cardData.name || 'Desconocido';
         const elixir = cardData.elixirCost || '?';
         const rarity = cardData.rarity || 'N/A';
         const type = cardData.type || 'N/A';
+        const imageUrl = cardData.imageUrl || 'https://via.placeholder.com/50?text=NoImg'; // Usar un placeholder si no hay URL
 
         li.innerHTML = `
-            <div>
-                <strong>${name}</strong> | Elixir: ${elixir} | Rareza: ${rarity} | Tipo: ${type}
+            <div class="card-info">
+                <img src="${imageUrl}" alt="Imagen de ${name}" class="card-image" onerror="this.onerror=null;this.src='https://via.placeholder.com/50?text=Err'">
+                <div>
+                    <strong>${name}</strong> | Elixir: ${elixir} | Rareza: ${rarity} | Tipo: ${type}
+                </div>
             </div>
             <div>
                 <button onclick="loadCardForEdit('${id}')">Editar</button>
@@ -85,16 +87,17 @@ form.addEventListener('submit', async (e) => {
     
     const name = document.getElementById('name').value;
     const elixirCost = parseInt(document.getElementById('elixirCost').value, 10);
-    // MODIFICACIÓN: Capturar nuevos campos
     const rarity = document.getElementById('rarity').value;
     const type = document.getElementById('type').value;
+    // NUEVO CAMPO: URL de la imagen
+    const imageUrl = document.getElementById('imageUrl').value;
     
-    // Estructura que espera el endpoint POST/PUT del servidor
     const cardData = {
         name: name,
         elixirCost: elixirCost,
-        rarity: rarity, // Nuevo
-        type: type,     // Nuevo
+        rarity: rarity, 
+        type: type,     
+        imageUrl: imageUrl, // Nuevo
     };
     
     const method = isEditing ? 'PUT' : 'POST';
@@ -107,7 +110,7 @@ form.addEventListener('submit', async (e) => {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ data: cardData }) // Envolvemos en 'data'
+            body: JSON.stringify({ data: cardData }) 
         });
         
         if (!response.ok) {
@@ -141,9 +144,10 @@ async function loadCardForEdit(cardId) {
         // Carga los datos en el formulario
         document.getElementById('name').value = card.data.name;
         document.getElementById('elixirCost').value = card.data.elixirCost;
-        // MODIFICACIÓN: Cargar nuevos campos para editar
         document.getElementById('rarity').value = card.data.rarity;
         document.getElementById('type').value = card.data.type;
+        // NUEVO CAMPO: Cargar URL de la imagen
+        document.getElementById('imageUrl').value = card.data.imageUrl;
         
         // Establece el modo edición
         idInput.value = cardId;

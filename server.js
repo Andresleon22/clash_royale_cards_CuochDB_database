@@ -1,4 +1,4 @@
-// server.js (MODIFICADO)
+// server.js (MODIFICADO - Solo las funciones POST y PUT han cambiado)
 
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -14,7 +14,7 @@ app.use(bodyParser.json());
 
 app.use(express.static(__dirname)); 
 
-// --- 🛑 CREDENCIALES FINALES DE PRUEBA (¡CONFIGURA EN RAILWAY!) 🛑 ---
+// --- 🛑 CREDENCIALES DE COUCHBASE (Mantenidas del archivo anterior) 🛑 ---
 const connectionString = process.env.CB_CONNECTION_STRING || 'couchbases://cb.cvm3woykexh3g6ja.cloud.couchbase.com'; 
 const username = process.env.CB_USERNAME || 'Caballero';
 const password = process.env.CB_PASSWORD || 'MiniPekka1?';
@@ -50,18 +50,15 @@ async function connectToCouchbase() {
 
 // --- ENDPOINTS CRUD ---
 
-// 1. READ ALL - Obtiene todas las cartas (N1QL)
+// 1. READ ALL - Obtiene todas las cartas (N1QL) - (Mantenido sin cambios)
 app.get('/datos', async (req, res) => {
     console.log("-> RECIBIDA Petición GET /datos. Iniciando DB Query.");
 
     try {
-        // MODIFICACIÓN: Añadimos META(d).id AS _id y eliminamos LIMIT 50.
         const query = `SELECT META(d).id AS _id, d.* FROM \`${bucketName}\` AS d WHERE d.type = 'card'`; 
-        
         const result = await cluster.query(query, { scope: scopeName });
         
         console.log(`[GET /datos] Éxito. Documentos encontrados: ${result.rows.length}`);
-
         res.status(200).json(result.rows);
     } catch (error) {
         console.error('❌ ERROR FATAL DE N1QL en /datos:', error.message || error);
@@ -73,12 +70,12 @@ app.get('/datos', async (req, res) => {
 // 2. CREATE - Crea una nueva carta
 app.post('/datos', async (req, res) => {
     const cardData = req.body.data;
-    // MODIFICACIÓN: Añadir validación para rarity y type
-    if (!cardData || !cardData.name || !cardData.elixirCost || !cardData.rarity || !cardData.type) {
-        return res.status(400).json({ error: 'Faltan campos requeridos (name, elixirCost, rarity, type).' });
+    // MODIFICACIÓN: Añadir validación para imageUrl
+    if (!cardData || !cardData.name || !cardData.elixirCost || !cardData.rarity || !cardData.type || !cardData.imageUrl) {
+        return res.status(400).json({ error: 'Faltan campos requeridos (name, elixirCost, rarity, type, imageUrl).' });
     }
     
-    const docId = `card::${uuidv4()}`; // Crea un ID único
+    const docId = `card::${uuidv4()}`;
     const document = {
         type: 'card', 
         data: cardData,
@@ -96,7 +93,7 @@ app.post('/datos', async (req, res) => {
 });
 
 
-// 3. READ ONE - Obtiene una sola carta por ID (opcional, para edición)
+// 3. READ ONE - Obtiene una sola carta por ID (Mantenido sin cambios)
 app.get('/datos/:id', async (req, res) => {
     const docId = req.params.id;
     try {
@@ -117,9 +114,9 @@ app.get('/datos/:id', async (req, res) => {
 app.put('/datos/:id', async (req, res) => {
     const docId = req.params.id;
     const cardData = req.body.data;
-    // MODIFICACIÓN: Añadir validación para rarity y type
-    if (!cardData || !cardData.name || !cardData.elixirCost || !cardData.rarity || !cardData.type) {
-        return res.status(400).json({ error: 'Faltan campos requeridos (name, elixirCost, rarity, type).' });
+    // MODIFICACIÓN: Añadir validación para imageUrl
+    if (!cardData || !cardData.name || !cardData.elixirCost || !cardData.rarity || !cardData.type || !cardData.imageUrl) {
+        return res.status(400).json({ error: 'Faltan campos requeridos (name, elixirCost, rarity, type, imageUrl).' });
     }
 
     try {
@@ -144,7 +141,7 @@ app.put('/datos/:id', async (req, res) => {
 });
 
 
-// 5. DELETE - Borra una carta
+// 5. DELETE - Borra una carta (Mantenido sin cambios)
 app.delete('/datos/:id', async (req, res) => {
     const docId = req.params.id;
     try {
@@ -161,7 +158,7 @@ app.delete('/datos/:id', async (req, res) => {
 });
 
 
-// 💡 INICIO DEL SERVIDOR: SOLO DESPUÉS DE CONECTAR A COUCHBASE
+// 💡 INICIO DEL SERVIDOR
 connectToCouchbase().then(() => {
     app.listen(PORT, '0.0.0.0', () => {
         console.log(`Servidor Express ejecutándose en el puerto ${PORT} (Conexión Capella OK).`);
