@@ -1,6 +1,6 @@
-// app.js
+// app.js - Versión Final CRUD Completo
 
-const API_URL = '/datos';
+const API_URL = '/datos'; // ⬅️ CRÍTICO: RUTA RELATIVA para que funcione en Railway
 const form = document.getElementById('carta-crud-form');
 const cardListDiv = document.getElementById('card-list');
 const submitBtn = document.getElementById('submit-btn');
@@ -8,34 +8,38 @@ const submitBtn = document.getElementById('submit-btn');
 let isEditing = false; 
 
 // ===================================================================
+// 1. UTILIDADES
+// ===================================================================
+
+function resetForm() {
+    form.reset();
+    isEditing = false;
+    submitBtn.textContent = 'Crear Carta';
+    document.getElementById('_id').value = ''; // Limpia el ID oculto
+}
+
+// ===================================================================
 // 2. READ (LEER - Listar todas las cartas)
 // ===================================================================
 
 async function fetchCards() {
-    console.log("Intentando obtener cartas de la API...");
     cardListDiv.innerHTML = 'Cargando cartas...';
     
     try {
         const response = await fetch(API_URL);
         
         if (!response.ok) {
-            // Esto captura el error HTTP 500 que hemos estado viendo
             throw new Error(`Error HTTP: ${response.status}`);
         }
 
-        const rawCards = await response.json(); 
+        const cards = await response.json(); 
         
-        // Mapeamos los datos. Como la consulta N1QL en server.js ahora devuelve el 
-        // documento en la raíz, filtramos por la propiedad 'type' que sabemos que existe.
-        const cards = rawCards.filter(card => card.type === 'card');
-
         renderCardList(cards);
     } catch (error) {
         console.error('Error al conectar con la API de Couchbase:', error);
         cardListDiv.innerHTML = `
             <strong>ERROR DE CONEXIÓN:</strong> 
-            Asegúrate de que tu <strong>server.js</strong> esté corriendo con 'node server.js'. 
-            Error: ${error.message}
+            Error: ${error.message}. Verifica los logs de Railway.
         `;
     }
 }
@@ -43,7 +47,7 @@ async function fetchCards() {
 function renderCardList(cards) {
     cardListDiv.innerHTML = '';
     if (cards.length === 0) {
-        cardListDiv.innerHTML = '<p>No hay cartas en la base de datos o la API devolvió datos vacíos.</p>';
+        cardListDiv.innerHTML = '<p>No hay cartas en la base de datos.</p>';
         return;
     }
 
@@ -51,14 +55,12 @@ function renderCardList(cards) {
         const div = document.createElement('div');
         div.className = 'card-item';
 
-        // La carta tiene los datos en la raíz: card.name, card.elixirCost
-        const cardName = card.data ? card.data.name : card.name; // Soporte para estructuras anidadas (JSON original) o planas
-        const elixirCost = card.data ? card.data.elixirCost : card.elixirCost;
-        const id = card._id || 'ID Desconocido'; // _id solo existe si la consulta N1QL lo trae
+        // Usamos la estructura plana: card.name, card.elixirCost, card._id
+        const id = card._id || 'ID Desconocido'; 
 
         div.innerHTML = `
             <div>
-                <strong>${cardName}</strong> (Elixir: ${elixirCost})
+                <strong>${card.name || 'N/A'}</strong> (Elixir: ${card.elixirCost || 'N/A'})
             </div>
             <div>
                 <button onclick="loadCardForEdit('${id}')">Editar</button>
@@ -70,7 +72,7 @@ function renderCardList(cards) {
 }
 
 // ===================================================================
-// 3. CREATE & UPDATE (Solo CREATE implementado para la prueba inicial)
+// 3. CREATE & UPDATE (Guardar)
 // ===================================================================
 
 form.addEventListener('submit', async (e) => {
@@ -78,18 +80,13 @@ form.addEventListener('submit', async (e) => {
     
     const name = document.getElementById('name').value;
     const elixirCost = parseInt(document.getElementById('elixirCost').value, 10);
+    const cardId = document.getElementById('_id').value;
     
-    // Si usas el JSON original (que tiene el objeto "data" anidado), usa esta estructura:
-    const cardData = {
-        type: 'card', 
-        data: {
-            name: name,
-            elixirCost: elixirCost,
-        }
-    };
+    // El backend espera una estructura plana (sin el objeto 'data' anidado)
+    const cardData = { name, elixirCost };
     
     const method = isEditing ? 'PUT' : 'POST';
-    const url = isEditing ? `${API_URL}/${document.getElementById('_id').value}` : API_URL;
+    const url = isEditing ? `${API_URL}/${cardId}` : API_URL;
 
     try {
         const response = await fetch(url, {
@@ -104,26 +101,66 @@ form.addEventListener('submit', async (e) => {
             throw new Error('Fallo en la operación de guardado/actualización.');
         }
 
-        console.log(`Carta ${isEditing ? 'actualizada' : 'creada'} con éxito.`);
+        alert(`Carta ${isEditing ? 'actualizada' : 'creada'} con éxito.`);
         
         resetForm();
-        fetchCards();
+        fetchCards(); // Refrescar la lista
     } catch (error) {
         console.error('Error al guardar o actualizar la carta:', error);
+        alert(`Error: ${error.message}`);
     }
 });
 
-// [Funciones de Edición, Borrado y Reset, omitidas por espacio]
-function loadCardForEdit(cardId) { alert("Funcionalidad de edición pendiente."); }
-function resetForm() { form.reset(); isEditing = false; submitBtn.textContent = 'Crear Carta'; }
-function deleteCard(cardId) { 
-    // Esta función requiere el endpoint DELETE en server.js
-    alert("Funcionalidad de borrado pendiente, pero el servidor está listo para implementarla.");
+
+// 4. READ ONE (Cargar para Editar)
+async function loadCardForEdit(cardId) {
+    try {
+        const response = await fetch(`${API_URL}/${cardId}`);
+        if (!response.ok) throw new Error('Error al cargar la carta para edición.');
+        
+        const card = await response.json();
+        
+        // Cargar los datos en el formulario
+        document.getElementById('name').value = card.name;
+        document.getElementById('elixirCost').value = card.elixirCost;
+        document.getElementById('_id').value = card._id; // Almacena el ID del documento
+        
+        isEditing = true;
+        submitBtn.textContent = 'Actualizar Carta';
+        window.scrollTo(0, 0); // Ir al formulario
+    } catch (error) {
+        console.error('Error al cargar datos de edición:', error);
+        alert(`Error: ${error.message}`);
+    }
+}
+
+
+// 5. DELETE (Borrar)
+async function deleteCard(cardId) { 
+    if (!confirm('¿Estás seguro de que quieres eliminar esta carta?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_URL}/${cardId}`, {
+            method: 'DELETE'
+        });
+
+        if (!response.ok) {
+            throw new Error('Fallo al eliminar la carta.');
+        }
+
+        alert('Carta eliminada con éxito.');
+        fetchCards(); // Refrescar la lista
+    } catch (error) {
+        console.error('Error al eliminar la carta:', error);
+        alert(`Error: ${error.message}`);
+    }
 }
 
 
 // ===================================================================
-// 5. INICIALIZACIÓN
+// 6. INICIALIZACIÓN
 // ===================================================================
 
 document.addEventListener('DOMContentLoaded', fetchCards);

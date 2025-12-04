@@ -1,23 +1,22 @@
-// server.js
+// server.js - Versión Final CRUD Completo
 
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const couchbase = require('couchbase');
+const path = require('path'); // Necesario para servir index.html correctamente
 const { v4: uuidv4 } = require('uuid'); 
 
 const app = express(); // ⬅️ CRÍTICO: Definición de Express
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(bodyParser.json());
 
-// 💡 CORRECCIÓN: Permite que Express sirva archivos estáticos como index.html
-app.use(express.static(__dirname)); 
+// 💡 CORRECCIÓN: Permite que Express sirva archivos estáticos (index.html, app.js, etc.)
+app.use(express.static(path.join(__dirname, '/'))); 
 
-// --- 🛑 CREDENCIALES FINALES DE PRUEBA (¡CONFIGURA EN RAILWAY!) 🛑 ---
-// Las variables de entorno son la mejor práctica. Si las tienes en Railway, 
-// se usarán automáticamente. Si no, usa estos valores de fallback.
+// --- 🛑 CREDENCIALES (Railway las usa si están configuradas) 🛑 ---
 const connectionString = process.env.CB_CONNECTION_STRING || 'couchbases://cb.cvm3woykexh3g6ja.cloud.couchbase.com'; 
 const username = process.env.CB_USERNAME || 'Caballero';
 const password = process.env.CB_PASSWORD || 'MiniPekka1?';
@@ -48,28 +47,27 @@ async function connectToCouchbase() {
 
     } catch (error) {
         console.error('❌ Error CRÍTICO al conectar a Couchbase Capella:', error.message);
-        process.exit(1); // Detiene la app si falla la conexión (para notificar a Railway)
+        process.exit(1); // Detiene la app si falla la conexión
     }
 }
 
 // --- ENDPOINTS CRUD ---
 
-// 1. READ ALL - Obtiene todas las cartas (N1QL)
+// 1. READ ALL - Obtiene todas las cartas (Limitado a 50)
 app.get('/datos', async (req, res) => {
-    console.log("-> RECIBIDA Petición GET /datos. Iniciando DB Query.");
-
     try {
-        // La consulta trae todos los documentos del bucket con el tipo 'card'
-        // Esto es una buena práctica para filtrar solo los documentos relevantes
-        const query = `SELECT d.* FROM \`${bucketName}\` AS d WHERE d.type = 'card' LIMIT 50`; 
+        // Traemos el documento completo (d.*) y el ID de metadatos (META(d).id)
+        const query = `SELECT d.*, META(d).id FROM \`${bucketName}\` AS d WHERE d.type = 'card' LIMIT 50`; 
         
-        // Ejecutamos la consulta en el scope_default
         const result = await cluster.query(query, { scope: scopeName });
         
-        console.log(`[GET /datos] Éxito. Documentos encontrados: ${result.rows.length}`);
+        // Mapeamos para que cada objeto retornado tenga el ID y los datos en la raíz
+        const rowsWithId = result.rows.map(row => ({
+            ...row.d, 
+            _id: row.id // Usamos _id para ser consistente con el frontend
+        }));
 
-        // Devuelve el JSON puro de los documentos
-        res.status(200).json(result.rows);
+        res.status(200).json(rowsWithId);
     } catch (error) {
         console.error('❌ ERROR FATAL DE N1QL en /datos:', error.message || error);
         res.status(500).json({ error: 'Fallo al recuperar los datos de la base de datos.' });
@@ -79,21 +77,23 @@ app.get('/datos', async (req, res) => {
 
 // 2. CREATE - Crea una nueva carta
 app.post('/datos', async (req, res) => {
-    const cardData = req.body.data;
-    if (!cardData || !cardData.name || !cardData.elixirCost) {
+    // Usamos el cuerpo de la petición directamente, asumiendo una estructura plana y limpia
+    const { name, elixirCost } = req.body; 
+    
+    if (!name || !elixirCost) {
         return res.status(400).json({ error: 'Faltan campos requeridos (name, elixirCost).' });
     }
     
-    const docId = `card::${uuidv4()}`; // Crea un ID único
+    const docId = `card::${uuidv4()}`; 
     const document = {
         type: 'card', 
-        data: cardData,
+        name: name,
+        elixirCost: elixirCost,
         createdAt: new Date().toISOString()
     };
 
     try {
         await collection.insert(docId, document);
-        console.log(`[POST /datos] Éxito. Carta creada con ID: ${docId}`);
         res.status(201).json({ message: 'Carta creada con éxito', id: docId });
     } catch (error) {
         console.error('❌ ERROR FATAL en POST /datos:', error.message || error);
@@ -101,19 +101,17 @@ app.post('/datos', async (req, res) => {
     }
 });
 
-
-// 3. READ ONE - Obtiene una sola carta por ID (opcional, para edición)
+// 3. READ ONE - Obtiene una sola carta por ID (Para edición)
 app.get('/datos/:id', async (req, res) => {
     const docId = req.params.id;
     try {
         const result = await collection.get(docId);
-        console.log(`[GET /datos/:id] Éxito. Carta encontrada: ${docId}`);
-        res.status(200).json(result.content);
+        // Devolvemos el contenido del documento y el ID de metadatos
+        res.status(200).json({ ...result.content, _id: docId });
     } catch (error) {
         if (error instanceof couchbase.DocumentNotFoundError) {
             return res.status(404).json({ error: 'Carta no encontrada.' });
         }
-        console.error('❌ ERROR FATAL en GET /datos/:id:', error.message || error);
         res.status(500).json({ error: 'Fallo al recuperar la carta.' });
     }
 });
@@ -122,24 +120,27 @@ app.get('/datos/:id', async (req, res) => {
 // 4. UPDATE - Actualiza una carta existente
 app.put('/datos/:id', async (req, res) => {
     const docId = req.params.id;
-    const cardData = req.body.data;
-    if (!cardData || !cardData.name || !cardData.elixirCost) {
+    const { name, elixirCost } = req.body;
+    
+    if (!name || !elixirCost) {
         return res.status(400).json({ error: 'Faltan campos requeridos (name, elixirCost).' });
     }
 
-    // Nota: Para la edición real se recomienda usar replace y el CAS (Check And Swap)
     try {
-        // Obtenemos el documento actual para mantener el metadato 'type'
+        // Paso 1: Obtener el documento actual para mantener el metadato 'type' y otras propiedades
         const currentDoc = await collection.get(docId);
-        const newDocument = {
-            ...currentDoc.content, // Mantenemos las propiedades existentes
-            data: cardData,
+
+        // Paso 2: Crear el nuevo documento con los datos actualizados
+        const updatedDocument = {
+            ...currentDoc.content, // Mantiene todas las propiedades no enviadas (como 'type' y 'createdAt')
+            name: name,
+            elixirCost: elixirCost,
             updatedAt: new Date().toISOString()
         };
 
-        await collection.replace(docId, newDocument);
+        // Paso 3: Reemplazar el documento
+        await collection.replace(docId, updatedDocument);
 
-        console.log(`[PUT /datos/:id] Éxito. Carta actualizada: ${docId}`);
         res.status(200).json({ message: 'Carta actualizada con éxito', id: docId });
     } catch (error) {
         if (error instanceof couchbase.DocumentNotFoundError) {
@@ -156,7 +157,6 @@ app.delete('/datos/:id', async (req, res) => {
     const docId = req.params.id;
     try {
         await collection.remove(docId);
-        console.log(`[DELETE /datos/:id] Éxito. Carta eliminada: ${docId}`);
         res.status(200).json({ message: 'Carta eliminada con éxito', id: docId });
     } catch (error) {
         if (error instanceof couchbase.DocumentNotFoundError) {
@@ -174,6 +174,5 @@ connectToCouchbase().then(() => {
         console.log(`Servidor Express ejecutándose en el puerto ${PORT} (Conexión Capella OK).`);
     });
 }).catch(err => {
-    // Esto solo se ejecuta si la función connectToCouchbase NO lanzó process.exit(1)
     console.error('Error final al iniciar el servidor:', err.message);
 });
