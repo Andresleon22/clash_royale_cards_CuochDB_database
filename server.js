@@ -1,4 +1,4 @@
-// server.js
+// server.js (MODIFICADO)
 
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -6,18 +6,16 @@ const cors = require('cors');
 const couchbase = require('couchbase');
 const { v4: uuidv4 } = require('uuid'); 
 
-const app = express(); // ⬅️ CRÍTICO: Definición de Express
+const app = express();
 const PORT = 3000;
 
 app.use(cors());
 app.use(bodyParser.json());
 
-// 💡 CORRECCIÓN: Permite que Express sirva archivos estáticos como index.html
+// Permite que Express sirva archivos estáticos como index.html
 app.use(express.static(__dirname)); 
 
 // --- 🛑 CREDENCIALES FINALES DE PRUEBA (¡CONFIGURA EN RAILWAY!) 🛑 ---
-// Las variables de entorno son la mejor práctica. Si las tienes en Railway, 
-// se usarán automáticamente. Si no, usa estos valores de fallback.
 const connectionString = process.env.CB_CONNECTION_STRING || 'couchbases://cb.cvm3woykexh3g6ja.cloud.couchbase.com'; 
 const username = process.env.CB_USERNAME || 'Caballero';
 const password = process.env.CB_PASSWORD || 'MiniPekka1?';
@@ -33,7 +31,7 @@ async function connectToCouchbase() {
         cluster = await couchbase.connect(connectionString, {
             username: username,
             password: password,
-            // 💡 CORRECCIÓN: Aumentamos el timeout para evitar "unambiguous timeout"
+            // Aumentamos el timeout para evitar "unambiguous timeout"
             timeouts: {
                 connectTimeout: 30000 // 30 segundos
             },
@@ -48,7 +46,7 @@ async function connectToCouchbase() {
 
     } catch (error) {
         console.error('❌ Error CRÍTICO al conectar a Couchbase Capella:', error.message);
-        process.exit(1); // Detiene la app si falla la conexión (para notificar a Railway)
+        process.exit(1);
     }
 }
 
@@ -59,9 +57,9 @@ app.get('/datos', async (req, res) => {
     console.log("-> RECIBIDA Petición GET /datos. Iniciando DB Query.");
 
     try {
-        // La consulta trae todos los documentos del bucket con el tipo 'card'
-        // Esto es una buena práctica para filtrar solo los documentos relevantes
-        const query = `SELECT d.* FROM \`${bucketName}\` AS d WHERE d.type = 'card' LIMIT 50`; 
+        // MODIFICACIÓN: Añadimos META(d).id AS _id para obtener el ID del documento
+        // y quitamos LIMIT 50.
+        const query = `SELECT META(d).id AS _id, d.* FROM \`${bucketName}\` AS d WHERE d.type = 'card'`; 
         
         // Ejecutamos la consulta en el scope_default
         const result = await cluster.query(query, { scope: scopeName });
@@ -127,7 +125,6 @@ app.put('/datos/:id', async (req, res) => {
         return res.status(400).json({ error: 'Faltan campos requeridos (name, elixirCost).' });
     }
 
-    // Nota: Para la edición real se recomienda usar replace y el CAS (Check And Swap)
     try {
         // Obtenemos el documento actual para mantener el metadato 'type'
         const currentDoc = await collection.get(docId);
@@ -174,6 +171,5 @@ connectToCouchbase().then(() => {
         console.log(`Servidor Express ejecutándose en el puerto ${PORT} (Conexión Capella OK).`);
     });
 }).catch(err => {
-    // Esto solo se ejecuta si la función connectToCouchbase NO lanzó process.exit(1)
     console.error('Error final al iniciar el servidor:', err.message);
 });
