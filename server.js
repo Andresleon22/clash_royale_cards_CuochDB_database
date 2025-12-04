@@ -12,7 +12,6 @@ const PORT = 3000;
 app.use(cors());
 app.use(bodyParser.json());
 
-// Permite que Express sirva archivos estáticos como index.html
 app.use(express.static(__dirname)); 
 
 // --- 🛑 CREDENCIALES FINALES DE PRUEBA (¡CONFIGURA EN RAILWAY!) 🛑 ---
@@ -31,9 +30,8 @@ async function connectToCouchbase() {
         cluster = await couchbase.connect(connectionString, {
             username: username,
             password: password,
-            // Aumentamos el timeout para evitar "unambiguous timeout"
             timeouts: {
-                connectTimeout: 30000 // 30 segundos
+                connectTimeout: 30000 
             },
             configProfile: 'wanDevelopment' 
         });
@@ -57,16 +55,13 @@ app.get('/datos', async (req, res) => {
     console.log("-> RECIBIDA Petición GET /datos. Iniciando DB Query.");
 
     try {
-        // MODIFICACIÓN: Añadimos META(d).id AS _id para obtener el ID del documento
-        // y quitamos LIMIT 50.
+        // MODIFICACIÓN: Añadimos META(d).id AS _id y eliminamos LIMIT 50.
         const query = `SELECT META(d).id AS _id, d.* FROM \`${bucketName}\` AS d WHERE d.type = 'card'`; 
         
-        // Ejecutamos la consulta en el scope_default
         const result = await cluster.query(query, { scope: scopeName });
         
         console.log(`[GET /datos] Éxito. Documentos encontrados: ${result.rows.length}`);
 
-        // Devuelve el JSON puro de los documentos
         res.status(200).json(result.rows);
     } catch (error) {
         console.error('❌ ERROR FATAL DE N1QL en /datos:', error.message || error);
@@ -78,8 +73,9 @@ app.get('/datos', async (req, res) => {
 // 2. CREATE - Crea una nueva carta
 app.post('/datos', async (req, res) => {
     const cardData = req.body.data;
-    if (!cardData || !cardData.name || !cardData.elixirCost) {
-        return res.status(400).json({ error: 'Faltan campos requeridos (name, elixirCost).' });
+    // MODIFICACIÓN: Añadir validación para rarity y type
+    if (!cardData || !cardData.name || !cardData.elixirCost || !cardData.rarity || !cardData.type) {
+        return res.status(400).json({ error: 'Faltan campos requeridos (name, elixirCost, rarity, type).' });
     }
     
     const docId = `card::${uuidv4()}`; // Crea un ID único
@@ -121,15 +117,15 @@ app.get('/datos/:id', async (req, res) => {
 app.put('/datos/:id', async (req, res) => {
     const docId = req.params.id;
     const cardData = req.body.data;
-    if (!cardData || !cardData.name || !cardData.elixirCost) {
-        return res.status(400).json({ error: 'Faltan campos requeridos (name, elixirCost).' });
+    // MODIFICACIÓN: Añadir validación para rarity y type
+    if (!cardData || !cardData.name || !cardData.elixirCost || !cardData.rarity || !cardData.type) {
+        return res.status(400).json({ error: 'Faltan campos requeridos (name, elixirCost, rarity, type).' });
     }
 
     try {
-        // Obtenemos el documento actual para mantener el metadato 'type'
         const currentDoc = await collection.get(docId);
         const newDocument = {
-            ...currentDoc.content, // Mantenemos las propiedades existentes
+            ...currentDoc.content, 
             data: cardData,
             updatedAt: new Date().toISOString()
         };
