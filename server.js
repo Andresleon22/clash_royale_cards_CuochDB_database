@@ -8,7 +8,7 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid'); 
 
 const app = express();
-const PORT = process.env.PORT || 3000; // CRÍTICO: Usa el puerto de Railway o 3000
+const PORT = process.env.PORT || 3000; // Usa el puerto de Railway o 3000
 
 app.use(cors());
 app.use(bodyParser.json());
@@ -44,12 +44,12 @@ async function connectToCouchbase() {
         collection = scope.collection(collectionName);
         
         console.log('✅ Conexión a Couchbase Capella exitosa.'); 
-        return true; // Retorna true si fue exitosa
+        return true; 
 
     } catch (error) {
-        // Permitimos que el servidor siga corriendo (¡Adiós 502!)
+        // Permitimos que el servidor siga corriendo (Adiós 502 por fallos de DB)
         console.error('❌ ERROR: NO SE PUDO CONECTAR A COUCHBASE. LAS RUTAS CRUD FALLARÁN:', error.message);
-        throw error; // Propagar el error para que el .catch() del app.listen lo maneje
+        throw error; 
     }
 }
 
@@ -69,14 +69,12 @@ app.get('/datos', async (req, res) => {
     if (!checkConnection(res)) return;
     
     try {
-        // CRÍTICO: Traemos el documento completo (d.*) y el ID de metadatos (META(d).id AS _id)
-        // Se filtra por type='card' para asegurar que solo se traigan los documentos correctos
+        // CRÍTICO: Traemos d.* y el ID de metadatos (_id).
         const query = `SELECT d.*, META(d).id AS _id FROM \`${bucketName}\` AS d WHERE d.type = 'card' LIMIT 50`; 
         
         const result = await cluster.query(query, { scope: scopeName });
         
-        // Mapeo CRÍTICO: Extraemos el objeto 'd' y el ID.
-        // Esto garantiza que el frontend reciba objetos planos como: { name: '...', elixirCost: N, _id: '...' }
+        // Mapeo CRÍTICO: Garantiza el formato plano para el frontend.
         const rows = result.rows.map(row => ({
             ...row.d, 
             _id: row._id 
@@ -103,7 +101,7 @@ app.post('/datos', async (req, res) => {
     const docId = `card::${uuidv4()}`; 
     const document = {
         type: 'card', 
-        name: name, // Guardado plano
+        name: name,
         elixirCost: elixirCost,
         createdAt: new Date().toISOString()
     };
@@ -148,7 +146,7 @@ app.put('/datos/:id', async (req, res) => {
     }
 
     try {
-        // Obtener el documento actual para mantener metadatos como 'type' y 'createdAt'
+        // Obtener el documento actual para mantener metadatos
         const currentDoc = await collection.get(docId);
         const updatedDocument = {
             ...currentDoc.content, 
@@ -159,4 +157,42 @@ app.put('/datos/:id', async (req, res) => {
 
         await collection.replace(docId, updatedDocument);
 
-        res.status(200).json({ message: 'Carta actualizada con éxito', id
+        // 💡 LÍNEA CORREGIDA (solución al SyntaxError 502)
+        res.status(200).json({ message: 'Carta actualizada con éxito', id: docId }); 
+    } catch (error) {
+        if (error instanceof couchbase.DocumentNotFoundError) {
+            return res.status(404).json({ error: 'Carta no encontrada para actualizar.' });
+        }
+        console.error('❌ ERROR FATAL en PUT /datos/:id:', error.message || error);
+        res.status(500).json({ error: 'Fallo al actualizar la carta.' });
+    }
+});
+
+
+// 5. DELETE - Borra una carta
+app.delete('/datos/:id', async (req, res) => {
+    if (!checkConnection(res)) return;
+
+    const docId = req.params.id;
+    try {
+        await collection.remove(docId);
+        res.status(200).json({ message: 'Carta eliminada con éxito', id: docId });
+    } catch (error) {
+        if (error instanceof couchbase.DocumentNotFoundError) {
+            return res.status(404).json({ error: 'Carta ya eliminada o no existe.' });
+        }
+        console.error('❌ ERROR FATAL en DELETE /datos/:id:', error.message || error);
+        res.status(500).json({ error: 'Fallo al eliminar la carta.' });
+    }
+});
+
+
+// 💡 BLOQUE FINAL: Iniciamos el servidor (no bloqueante)
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Servidor Express ejecutándose en el puerto ${PORT}.`);
+    // Llamar a la conexión de forma asíncrona. 
+    // El .catch() asegura que un fallo aquí no detenga el proceso principal de Node.
+    connectToCouchbase().catch(err => {
+        console.error("⚠️ Aviso: Fallo en la llamada asíncrona de conexión a DB, pero el servidor Express está activo.");
+    });
+});
