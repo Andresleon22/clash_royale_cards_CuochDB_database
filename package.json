@@ -5,7 +5,6 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "preinstall": "npm install --force"
   },
   "dependencies": {
     "body-parser": "^1.20.2",
