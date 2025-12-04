@@ -1,46 +1,23 @@
-// server.js - Versión para Railway
+// server.js - Versión TEST DE INICIO
 
-const express = require('express');
-const bodyParser = require('body-parser');
-const cors = require('cors');
-const couchbase = require('couchbase');
-const { v4: uuidv4 } = require('uuid'); 
-const path = require('path'); // <-- NUEVO: Para manejar rutas de archivos
+// ... (all require statements)
 
-const app = express();
-// El puerto de Railway se establece mediante una variable de entorno.
-const PORT = process.env.PORT || 3000; 
-
-// --- 🔑 CREDENCIALES DESDE VARIABLES DE ENTORNO 🔑 ---
-const connectionString = process.env.CB_CONNECTION_STRING; 
-const username = process.env.CB_USERNAME;
-const password = process.env.CB_PASSWORD;
-const bucketName = process.env.CB_BUCKET_NAME;
-
-// Nombres que no cambian
-const scopeName = '_default';
-const collectionName = '_default';   
+// ... (all const definitions)
 
 let collection; 
 let cluster;    
 
-app.use(cors());
-app.use(bodyParser.json());
-
-// --- 🟢 NUEVO: SERVIR ARCHIVOS ESTÁTICOS (index.html, app.js) 🟢 ---
-// Esto le dice a Express que sirva todos los archivos del directorio actual
-app.use(express.static(path.join(__dirname, '/'))); 
-
+// 🛑 COMENTAR ESTA FUNCIÓN POR COMPLETO
+/*
 async function connectToCouchbase() {
-    // ... (El resto de la función connectToCouchbase queda igual)
     try {
         cluster = await couchbase.connect(connectionString, {
             username: username,
             password: password,
             timeouts: {
-                connectTimeout: 30000
+                connectTimeout: 30000 // 30 segundos para la conexión inicial
             },
-            configProfile: 'wanDevelopment'
+            configProfile: 'wanDevelopment' 
         });
 
         const bucket = cluster.bucket(bucketName);
@@ -51,24 +28,17 @@ async function connectToCouchbase() {
 
     } catch (error) {
         console.error('❌ Error CRÍTICO al conectar a Couchbase Capella:', error.message);
-        process.exit(1);
+        process.exit(1); // Esto es lo que detiene tu servidor
     }
 }
+*/
 
-// --- ENDPOINTS CRUD ---
+// ... (endpoints CRUD - déjalos, aunque fallarán por no haber conexión)
 
-// RUTA RAIZ: Ahora sirve index.html directamente (ya que express.static lo hace)
-app.get('/', (req, res) => {
-    // Ya no es necesario, Express Static lo maneja, pero lo dejamos para asegurar el root
-    res.sendFile(path.join(__dirname, 'index.html'));
-});
+// 🛑 CAMBIAR EL BLOQUE FINAL POR app.listen DIRECTO
 
-// ... (El resto de las rutas CRUD /datos, /datos/:id quedan IGUAL) ...
-// (Asegúrate de copiar todas las rutas CRUD que te proporcioné anteriormente)
-
-
-connectToCouchbase().then(() => {
-    app.listen(PORT, '0.0.0.0', () => { 
-        console.log(`Servidor Express ejecutándose en el puerto ${PORT}`);
+// connectToCouchbase().then(() => {  // <-- COMENTAR ESTA LÍNEA
+    app.listen(PORT, '0.0.0.0', () => {
+        console.log(`Servidor Express se ejecutará en el puerto ${PORT} (Modo TEST).`);
     });
-});
+// });                               // <-- COMENTAR ESTA LÍNEA
