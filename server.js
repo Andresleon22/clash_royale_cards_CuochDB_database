@@ -65,7 +65,7 @@ app.get('/', (req, res) => {
 
 
 connectToCouchbase().then(() => {
-    app.listen(PORT, () => {
+    app.listen(PORT, '0.0.0.0', () => { 
         console.log(`Servidor Express ejecutándose en el puerto ${PORT}`);
     });
 });
