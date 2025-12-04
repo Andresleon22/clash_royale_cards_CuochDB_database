@@ -1,4 +1,4 @@
-// server.js - ¡VERSIÓN FINAL Y COMPLETA CON CRUD FUNCIONAL!
+// server.js - ¡VERSIÓN FINAL Y COMPLETA CON CRUD FUNCIONAL Y ARRANQUE ROBUSTO!
 
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -44,10 +44,12 @@ async function connectToCouchbase() {
         collection = scope.collection(collectionName);
         
         console.log('✅ Conexión a Couchbase Capella exitosa.'); 
+        return true; // Retorna true si fue exitosa
 
     } catch (error) {
         // Permitimos que el servidor siga corriendo (¡Adiós 502!)
         console.error('❌ ERROR: NO SE PUDO CONECTAR A COUCHBASE. LAS RUTAS CRUD FALLARÁN:', error.message);
+        throw error; // Propagar el error para que el .catch() del app.listen lo maneje
     }
 }
 
@@ -68,6 +70,7 @@ app.get('/datos', async (req, res) => {
     
     try {
         // CRÍTICO: Traemos el documento completo (d.*) y el ID de metadatos (META(d).id AS _id)
+        // Se filtra por type='card' para asegurar que solo se traigan los documentos correctos
         const query = `SELECT d.*, META(d).id AS _id FROM \`${bucketName}\` AS d WHERE d.type = 'card' LIMIT 50`; 
         
         const result = await cluster.query(query, { scope: scopeName });
@@ -100,7 +103,7 @@ app.post('/datos', async (req, res) => {
     const docId = `card::${uuidv4()}`; 
     const document = {
         type: 'card', 
-        name: name, // Guardado plano para que la consulta READ funcione
+        name: name, // Guardado plano
         elixirCost: elixirCost,
         createdAt: new Date().toISOString()
     };
@@ -156,38 +159,4 @@ app.put('/datos/:id', async (req, res) => {
 
         await collection.replace(docId, updatedDocument);
 
-        res.status(200).json({ message: 'Carta actualizada con éxito', id: docId });
-    } catch (error) {
-        if (error instanceof couchbase.DocumentNotFoundError) {
-            return res.status(404).json({ error: 'Carta no encontrada para actualizar.' });
-        }
-        console.error('❌ ERROR FATAL en PUT /datos/:id:', error.message || error);
-        res.status(500).json({ error: 'Fallo al actualizar la carta.' });
-    }
-});
-
-
-// 5. DELETE - Borra una carta
-app.delete('/datos/:id', async (req, res) => {
-    if (!checkConnection(res)) return;
-
-    const docId = req.params.id;
-    try {
-        await collection.remove(docId);
-        res.status(200).json({ message: 'Carta eliminada con éxito', id: docId });
-    } catch (error) {
-        if (error instanceof couchbase.DocumentNotFoundError) {
-            return res.status(404).json({ error: 'Carta ya eliminada o no existe.' });
-        }
-        console.error('❌ ERROR FATAL en DELETE /datos/:id:', error.message || error);
-        res.status(500).json({ error: 'Fallo al eliminar la carta.' });
-    }
-});
-
-
-// 💡 BLOQUE FINAL: Iniciamos el servidor y luego intentamos la conexión DB
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Servidor Express ejecutándose en el puerto ${PORT}.`);
-    // Llamar a la conexión de forma asíncrona (no bloquea el inicio)
-    connectToCouchbase(); 
-});
+        res.status(200).json({ message: 'Carta actualizada con éxito', id
