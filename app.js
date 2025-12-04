@@ -8,6 +8,15 @@ const idInput = document.getElementById('_id');
 
 let isEditing = false; 
 
+// URL de fallback en caso de error de imagen
+const FALLBACK_IMAGE_URL = 'https://via.placeholder.com/50?text=N/A';
+
+// Función auxiliar para renderizar una imagen
+function renderImage(url, altText) {
+    if (!url || url.includes('placeholder.com?text=N/A')) return '';
+    return `<img src="${url}" alt="${altText}" class="card-image" onerror="this.onerror=null;this.src='${FALLBACK_IMAGE_URL.replace('N/A', 'Err')}'">`;
+}
+
 // ===================================================================
 // 2. READ (LEER - Listar todas las cartas)
 // ===================================================================
@@ -45,7 +54,6 @@ function renderCardList(cards) {
         return;
     }
     
-    // MODIFICACIÓN: Usamos UL/LI en lugar de DIV para la lista (práctica semántica)
     const ul = document.createElement('ul');
 
     cards.forEach(card => {
@@ -61,14 +69,24 @@ function renderCardList(cards) {
         const rarity = cardData.rarity || 'N/A';
         const type = cardData.type || 'N/A';
         
-        // MODIFICACIÓN: Lógica de compatibilidad para la URL de la imagen.
-        // 1. Prioriza el nuevo campo 'imageUrl'.
-        // 2. Si no existe, usa 'iconUrls.medium' (estructura del JSON de ejemplo).
-        const imageUrl = cardData.imageUrl || cardData.iconUrls?.medium || 'https://via.placeholder.com/50?text=NoImg';
+        // URLs de la imagen: compatibilidad con datos existentes y nuevos campos
+        const normalUrl = cardData.imageUrl || cardData.iconUrls?.medium || FALLBACK_IMAGE_URL;
+        const evolutionUrl = cardData.evolutionImageUrl || cardData.iconUrls?.evolutionMedium || '';
+        const extraUrl = cardData.extraImageUrl || '';
+
+        // Contenedor de imágenes
+        const imagesHtml = `
+            <div class="card-images-container">
+                ${renderImage(normalUrl, `Imagen Normal de ${name}`)}
+                ${renderImage(evolutionUrl, `Imagen Evolución de ${name}`)}
+                ${renderImage(extraUrl, `Imagen Héroe de ${name}`)}
+            </div>
+        `;
+
 
         li.innerHTML = `
             <div class="card-info">
-                <img src="${imageUrl}" alt="Imagen de ${name}" class="card-image" onerror="this.onerror=null;this.src='https://via.placeholder.com/50?text=Err'">
+                ${imagesHtml}
                 <div>
                     <strong>${name}</strong> | Elixir: ${elixir} | Rareza: ${rarity} | Tipo: ${type}
                 </div>
@@ -95,15 +113,26 @@ form.addEventListener('submit', async (e) => {
     const elixirCost = parseInt(document.getElementById('elixirCost').value, 10);
     const rarity = document.getElementById('rarity').value;
     const type = document.getElementById('type').value;
-    // NUEVO CAMPO: URL de la imagen
+    
+    // CAPTURA DE LAS TRES URLS
     const imageUrl = document.getElementById('imageUrl').value;
+    const evolutionImageUrl = document.getElementById('evolutionImageUrl').value;
+    const extraImageUrl = document.getElementById('extraImageUrl').value;
+    
+    // Aseguramos que la URL principal es obligatoria
+    if (!imageUrl) {
+        alert('La URL de la Imagen (Normal) es obligatoria.');
+        return;
+    }
     
     const cardData = {
         name: name,
         elixirCost: elixirCost,
         rarity: rarity, 
         type: type,     
-        imageUrl: imageUrl, // Nuevo
+        imageUrl: imageUrl, 
+        evolutionImageUrl: evolutionImageUrl, // Nuevo
+        extraImageUrl: extraImageUrl,         // Nuevo
     };
     
     const method = isEditing ? 'PUT' : 'POST';
@@ -116,7 +145,6 @@ form.addEventListener('submit', async (e) => {
             headers: {
                 'Content-Type': 'application/json'
             },
-            // Enviamos los datos anidados en 'data', como espera el servidor
             body: JSON.stringify({ data: cardData }) 
         });
         
@@ -147,14 +175,18 @@ async function loadCardForEdit(cardId) {
         }
 
         const card = await response.json();
+        const cardData = card.data || {};
         
         // Carga los datos en el formulario
-        document.getElementById('name').value = card.data.name;
-        document.getElementById('elixirCost').value = card.data.elixirCost;
-        document.getElementById('rarity').value = card.data.rarity;
-        document.getElementById('type').value = card.data.type;
-        // NUEVO CAMPO: Cargar URL de la imagen, priorizando 'imageUrl'
-        document.getElementById('imageUrl').value = card.data.imageUrl || card.data.iconUrls?.medium || '';
+        document.getElementById('name').value = cardData.name;
+        document.getElementById('elixirCost').value = cardData.elixirCost;
+        document.getElementById('rarity').value = cardData.rarity;
+        document.getElementById('type').value = cardData.type;
+        
+        // Carga de las tres URLs (compatibilidad con datos existentes)
+        document.getElementById('imageUrl').value = cardData.imageUrl || cardData.iconUrls?.medium || '';
+        document.getElementById('evolutionImageUrl').value = cardData.evolutionImageUrl || cardData.iconUrls?.evolutionMedium || '';
+        document.getElementById('extraImageUrl').value = cardData.extraImageUrl || '';
         
         // Establece el modo edición
         idInput.value = cardId;
